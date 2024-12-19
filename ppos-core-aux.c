@@ -46,7 +46,6 @@ int sem_down (semaphore_t *s) {
     PPOS_PREEMPT_DISABLE
 
     if (s == NULL) {
-        printf("\nWHY AM I HERE\n");
         return -1;
     }
 
