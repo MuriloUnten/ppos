@@ -1,0 +1,105 @@
+ppos-data.h:
+    typedef struct {
+       task_t** queue;
+       int counter;
+    } semaphore_t ;
+
+
+ppos-core-aux.c:
+    /*
+        Cria um semáforo com value vagas:
+        * Adiciona as vagas
+        * Aloca memória para a fila de tarefas
+    */ 
+    int sem_create (semaphore_t *s, int value) {
+        before_sem_create(s, value);
+
+        if (s == NULL) {
+            return -1;
+        }
+
+        s->counter = value;
+        s->queue = (task_t**) malloc(sizeof(task_t*));
+        *(s->queue) = NULL;
+
+        after_sem_create(s, value);
+        return 0;
+    }
+
+
+    /*
+        Solicita uma vaga:
+        * Se houver não houver vaga:
+            * Adiciona a tarefa na fila do semafaro
+            * Suspende essa tarefa
+            * Pedir para o dispatcher escolher outra tarefa
+
+        Obs.: 
+        * Não pode haver preempcao durante a execucao dessa funcao, para manter a atomicidade
+    */ 
+    int sem_down (semaphore_t *s) {
+        before_sem_down(s);
+        PPOS_PREEMPT_DISABLE
+
+        if (s == NULL) {
+            return -1;
+        }
+
+        s->counter--;
+        if (s->counter < 0) {
+            task_suspend(taskExec, s->queue);
+            task_yield();
+        }
+
+        PPOS_PREEMPT_ENABLE
+        after_sem_down(s);
+        return 0;
+    }
+
+    /*
+        Libera uma vaga:
+        * Se houver tarefa na fila:
+            * Remove uma tarefa da fila do semafaro
+            * Adiciona essa tarefa a fila de prontas
+
+        Obs.: 
+        * Não pode haver preempcao durante a execucao dessa funcao, para manter a atomicidade
+    */ 
+    int sem_up (semaphore_t *s) {
+        before_sem_up(s);
+        PPOS_PREEMPT_DISABLE
+
+        if (s == NULL) {
+            return -1;
+        }
+
+        s->counter++;
+        if (s->counter <= 0) {
+            queue_append((queue_t**) &readyQueue, queue_remove((queue_t**) s->queue, (queue_t*) *(s->queue)));
+        }
+
+        PPOS_PREEMPT_ENABLE
+        after_sem_up(s);
+        return 0;
+    }
+    /*
+        Libera vagas para todas as tarefas na fila:
+        * Para cada tarefa na fila:
+            * Libera uma vaga
+    */ 
+    int sem_destroy (semaphore_t *s) {
+        before_sem_destroy(s);
+        PPOS_PREEMPT_DISABLE
+
+        if (s == NULL) {
+            return -1;
+        }
+
+        while(s->counter < 0) {
+            sem_up(s);
+        }
+
+        PPOS_PREEMPT_ENABLE
+        after_sem_destroy(s);
+        return 0;
+    }
